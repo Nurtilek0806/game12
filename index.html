@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ky">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>X жана O</title>
+<style>
+/* ================= CSS ================= */
+:root {
+  --bg: #eef1f7; --card: #ffffff; --cell: #f1f4fa; --cell-hover: #e4e9f5;
+  --text: #1c2333; --muted: #6b7690; --x: #e5484d; --o: #2f7df6; --win: #22b573;
+  --shadow: 0 10px 30px rgba(30, 45, 90, .12); --radius: 18px;
+}
+:root[data-theme="dark"] {
+  --bg: #11141c; --card: #1a1f2b; --cell: #242b3b; --cell-hover: #2e3750;
+  --text: #eef1f8; --muted: #8f9bb5; --shadow: 0 10px 30px rgba(0, 0, 0, .45);
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+  min-height: 100vh; display: flex; justify-content: center; align-items: center;
+  padding: 20px; background: var(--bg); color: var(--text);
+  font-family: "Segoe UI", system-ui, sans-serif; transition: background .3s, color .3s;
+}
+.theme-btn {
+  position: fixed; top: 14px; right: 14px; border: 0; cursor: pointer; border-radius: 999px;
+  padding: 10px 16px; font-size: 14px; background: var(--card); color: var(--text);
+  box-shadow: var(--shadow); transition: transform .15s;
+}
+.theme-btn:hover { transform: scale(1.05); }
+.app { width: min(440px, 100%); text-align: center; }
+h1 { font-size: clamp(2.2rem, 8vw, 3.2rem); letter-spacing: 2px; margin: 30px 0 6px; }
+h1 .x { color: var(--x); } h1 .o { color: var(--o); }
+.turn { font-size: 1.15rem; font-weight: 600; min-height: 30px; margin-bottom: 14px; }
+.turn.x { color: var(--x); } .turn.o { color: var(--o); } .turn.win { color: var(--win); }
+
+.panel { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+.player {
+  background: var(--card); border-radius: var(--radius); padding: 12px; box-shadow: var(--shadow);
+  border: 2px solid transparent; transition: border-color .25s;
+}
+.player.active.x { border-color: var(--x); } .player.active.o { border-color: var(--o); }
+.player .name { font-weight: 700; font-size: 1.1rem; }
+.player.x .name { color: var(--x); } .player.o .name { color: var(--o); }
+.player .score { font-size: 1.9rem; font-weight: 800; }
+.dots { letter-spacing: 4px; color: var(--muted); font-size: 1.1rem; }
+.dots .on { color: inherit; }
+.player.x .dots .on { color: var(--x); } .player.o .dots .on { color: var(--o); }
+.count { font-size: .8rem; color: var(--muted); }
+
+.board {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 12px;
+  background: var(--card); border-radius: 24px; box-shadow: var(--shadow);
+}
+.cell {
+  aspect-ratio: 1; border: 0; border-radius: 16px; background: var(--cell); cursor: pointer;
+  font-size: clamp(2.8rem, 15vw, 4.6rem); font-weight: 800; line-height: 1;
+  transition: background .2s, transform .15s; color: var(--text);
+}
+.cell:hover:not(:disabled) { background: var(--cell-hover); transform: translateY(-2px); }
+.cell:disabled { cursor: default; }
+.cell.x { color: var(--x); } .cell.o { color: var(--o); }
+.cell .mark { display: inline-block; animation: pop .25s ease-out; }
+.cell.oldest .mark { opacity: .4; }               /* кийинки жолу өчө турган белги */
+.cell.out .mark { animation: fadeout .28s ease-in forwards; }
+.cell.win { background: color-mix(in srgb, var(--win) 25%, var(--cell)); animation: pulse .7s ease-in-out infinite alternate; }
+@keyframes pop { from { transform: scale(.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes fadeout { to { transform: scale(.4); opacity: 0; } }
+@keyframes pulse { to { transform: scale(1.06); box-shadow: 0 0 22px var(--win); } }
+
+.buttons { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 20px; }
+.btn {
+  border: 0; border-radius: 12px; padding: 12px 16px; font-size: .95rem; font-weight: 600; cursor: pointer;
+  background: var(--card); color: var(--text); box-shadow: var(--shadow); transition: transform .15s;
+}
+.btn:hover { transform: translateY(-2px); }
+.btn.primary { background: var(--win); color: #fff; }
+.btn.danger { color: var(--x); }
+.result { display: none; margin-top: 16px; }
+.result.show { display: block; animation: pop .3s ease-out; }
+.hint { color: var(--muted); font-size: .8rem; margin-top: 14px; }
+@media (max-width: 420px) { .board { gap: 7px; padding: 8px; } .btn { flex: 1 1 45%; } }
+</style>
+</head>
+<body>
+<button class="theme-btn" id="themeBtn" aria-label="Режимди алмаштыруу">🌙 Dark Mode</button>
+
+<main class="app">
+  <h1><span class="x">X</span> жана <span class="o">O</span></h1>
+  <div class="turn" id="turn" aria-live="polite"></div>
+
+  <section class="panel">
+    <div class="player x" id="pX">
+      <div class="name">X</div><div class="score" id="sX">0</div>
+      <div class="dots" id="dX"></div><div class="count" id="cX"></div>
+    </div>
+    <div class="player o" id="pO">
+      <div class="name">O</div><div class="score" id="sO">0</div>
+      <div class="dots" id="dO"></div><div class="count" id="cO"></div>
+    </div>
+  </section>
+
+  <section class="board" id="board" aria-label="Оюн талаасы"></section>
+
+  <div class="result" id="result">
+    <button class="btn primary" id="againBtn">Кайра ойноо</button>
+  </div>
+
+  <div class="buttons">
+    <button class="btn" id="newBtn">Жаңы оюн</button>
+    <button class="btn" id="restartBtn">Оюнду кайра баштоо</button>
+    <button class="btn danger" id="clearBtn">Упайларды тазалоо</button>
+  </div>
+  <p class="hint">Ар бир оюнчуда эң көп 3 белги. 4-белги коюлганда эң эски белги өчөт.</p>
+</main>
+
+<script>
+/* ================= JavaScript ================= */
+const MAX_MARKS = 3;            // бир оюнчунун максимум белгиси
+const MAX_REPEATS = 3;          // бир эле абал 3 жолу кайталанса - тең чыгуу
+const MAX_TOTAL_MOVES = 100;    // коопсуздук чеги: ушунча жүрүштөн кийин тең чыгуу
+const WIN_LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+const KEY_GAME = "xo_game_state", KEY_THEME = "xo_theme";
+
+const $ = (id) => document.getElementById(id);
+const boardEl = $("board");
+
+// ---- Оюндун абалы ----
+let state;          // { moves:{X:[],O:[]}, turn, over, winner, winLine, scores, seen, total }
+let scores = { X: 0, O: 0 };
+
+function freshState() {
+  // moves.X = xMoves, moves.O = oMoves (ар бири клетканын индекстеринин FIFO массиви)
+  return { moves: { X: [], O: [] }, turn: "X", over: false, winner: null, winLine: [], seen: {}, total: 0 };
+}
+
+/* ---------- LocalStorage ---------- */
+function save() {
+  try { localStorage.setItem(KEY_GAME, JSON.stringify({ ...state, scores })); } catch (e) { /* жеке режим */ }
+}
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem(KEY_GAME));
+    if (!d || !d.moves) return false;
+    state = { ...freshState(), ...d };
+    scores = { X: +d.scores?.X || 0, O: +d.scores?.O || 0 };
+    return true;
+  } catch (e) { return false; }
+}
+
+/* ---------- Оюнду баштоо ---------- */
+function buildBoard() {
+  boardEl.innerHTML = "";
+  for (let i = 0; i < 9; i++) {
+    const b = document.createElement("button");
+    b.className = "cell";
+    b.dataset.i = i;
+    b.setAttribute("aria-label", `Клетка ${i + 1}`);
+    b.addEventListener("click", () => selectCell(i));
+    boardEl.appendChild(b);
+  }
+}
+function startGame(keepScores = true) {
+  state = freshState();               // кезек ар дайым X'ке өтөт
+  if (!keepScores) scores = { X: 0, O: 0 };
+  recordPosition();
+  save(); render();
+}
+
+/* ---------- Клетканы тандоо ---------- */
+function selectCell(i) {
+  if (state.over) return;
+  if (state.moves.X.includes(i) || state.moves.O.includes(i)) return;   // клетка бош эмес
+  const removed = placeMark(state.turn, i);
+  state.total++;
+  if (checkWin(state.turn)) return finishGame(state.turn, removed);
+  changeTurn();
+  if (checkDraw()) return finishGame(null, removed);
+  save(); render(removed);
+}
+
+/* ---------- X коюу / O коюу (бир функция, эки оюнчу үчүн) ---------- */
+function placeMark(player, index) {
+  const moves = state.moves[player];
+  moves.push(index);                  // жаңы белгинин индекси массивге кошулат
+  if (moves.length > MAX_MARKS) {     // FIFO: эң биринчи коюлган белги өчөт
+    return moves.shift();             // өчүрүлгөн клетканын индексин кайтарат
+  }
+  return null;
+}
+function changeTurn() { state.turn = state.turn === "X" ? "O" : "X"; }
+function countMarks(player) { return state.moves[player].length; }
+
+/* ---------- Жеңиш жана тең чыгуу ---------- */
+function checkWin(player) {
+  const moves = state.moves[player];
+  if (moves.length < MAX_MARKS) return false;
+  const line = WIN_LINES.find((l) => l.every((c) => moves.includes(c)));
+  if (line) state.winLine = line;
+  return !!line;
+}
+function positionKey() {            // бардык белгилердин орду + кимдин кезеги
+  return `${state.moves.X.join("")}|${state.moves.O.join("")}|${state.turn}`;
+}
+function recordPosition() {
+  const k = positionKey();
+  state.seen[k] = (state.seen[k] || 0) + 1;
+  return state.seen[k];
+}
+function checkDraw() {
+  // Белгилер жылып тургандыктан оюн чексиз болушу мүмкүн:
+  // бир эле абал 3 жолу кайталанса же жүрүштөр өтө көп болсо - тең
+  return recordPosition() >= MAX_REPEATS || state.total >= MAX_TOTAL_MOVES;
+}
+function finishGame(winner, removed) {
+  state.over = true;
+  state.winner = winner;
+  if (winner) scores[winner]++;       // упайды эсептөө
+  save(); render(removed);
+}
+
+/* ---------- Көрсөтүү ---------- */
+function render(removedIndex = null) {
+  const owner = (i) => (state.moves.X.includes(i) ? "X" : state.moves.O.includes(i) ? "O" : "");
+  const oldest = {};                  // кийинки жолу өчө турган белгилер
+  ["X", "O"].forEach((p) => { if (countMarks(p) === MAX_MARKS) oldest[state.moves[p][0]] = true; });
+
+  [...boardEl.children].forEach((cell, i) => {
+    const p = owner(i);
+    cell.className = "cell" + (p ? " " + p.toLowerCase() : "");
+    cell.innerHTML = p ? `<span class="mark">${p}</span>` : "";
+    cell.disabled = state.over || !!p;
+    if (!state.over && oldest[i] && p === state.turn) cell.classList.add("oldest");
+    if (state.winLine.includes(i) && state.over && state.winner) cell.classList.add("win");
+    if (i === removedIndex && !p) {   // эски белги акырын өчөт (fade-out)
+      cell.innerHTML = `<span class="mark">${state.turn === "X" ? "O" : "X"}</span>`;
+      cell.classList.add("out", state.turn === "X" ? "o" : "x");
+      setTimeout(() => { if (!owner(i)) { cell.innerHTML = ""; cell.className = "cell"; } }, 280);
+    }
+  });
+  renderStatus();
+}
+function renderStatus() {
+  const turn = $("turn");
+  if (state.over) {
+    turn.className = "turn win";
+    turn.textContent = state.winner ? `${state.winner} жеңди! 🎉` : "Тең чыгуу! 🤝";
+  } else {
+    turn.className = "turn " + state.turn.toLowerCase();
+    turn.textContent = `${state.turn} оюнчунун кезеги`;
+  }
+  ["X", "O"].forEach((p) => {
+    const n = countMarks(p);
+    $("s" + p).textContent = scores[p];
+    $("d" + p).innerHTML = Array.from({ length: MAX_MARKS }, (_, k) => `<span class="${k < n ? "on" : ""}">${k < n ? "●" : "○"}</span>`).join("");
+    $("c" + p).textContent = `${p} белгилери: ${n}/${MAX_MARKS}`;
+    $("p" + p).classList.toggle("active", !state.over && state.turn === p);
+  });
+  $("result").classList.toggle("show", state.over);
+}
+
+/* ---------- Dark / Light режим ---------- */
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  $("themeBtn").textContent = theme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode";
+  try { localStorage.setItem(KEY_THEME, theme); } catch (e) {}
+}
+function toggleTheme() {
+  applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+}
+
+/* ---------- Баскычтар жана баштапкы жүктөө ---------- */
+$("themeBtn").addEventListener("click", toggleTheme);
+$("newBtn").addEventListener("click", () => startGame(true));          // упай сакталат
+$("againBtn").addEventListener("click", () => startGame(true));
+$("restartBtn").addEventListener("click", () => startGame(true));      // учурдагы оюнду баштан баштайт
+$("clearBtn").addEventListener("click", () => {
+  if (confirm("Упайлар тазалансынбы?")) { scores = { X: 0, O: 0 }; save(); render(); }
+});
+
+(function init() {
+  let theme = null;
+  try { theme = localStorage.getItem(KEY_THEME); } catch (e) {}
+  applyTheme(theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+  buildBoard();
+  if (load()) render(); else startGame(true);
+})();
+</script>
+</body>
+</html>
